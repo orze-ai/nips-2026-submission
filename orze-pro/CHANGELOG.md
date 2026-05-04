@@ -84,7 +84,7 @@ roles with 6–10 skills.
 ## 0.8.0 — Unified install UX
 
 ### Changed
-- **One-line install** — `ORZE_PRO_KEY=... curl -sL https://orze.ai/install | bash`
+- **One-line install** — `ORZE_PRO_KEY=... curl -sL https://ANON.example/install | bash`
 - **README rewritten** — single install path, removed step-by-step and alternative activation noise
 - **Requires orze >= 4.0.0**
 

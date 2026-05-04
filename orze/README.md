@@ -2,18 +2,18 @@
 
 [![PyPI](https://img.shields.io/pypi/v/orze)](https://pypi.org/project/orze/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
-[![orze-pro](https://img.shields.io/badge/orze--pro-private-blue)](https://orze.ai/pro)
+[![orze-pro](https://img.shields.io/badge/orze--pro-private-blue)](https://ANON.example/pro)
 
 A GPU experiment orchestrator for ML research.
 
 Orze runs experiments on GPUs: **schedule ideas → train → evaluate → report → repeat**. It coordinates GPUs via filesystem locks, works across machines, and gives you a complete leaderboard, notifications, and analysis — out of the box.
 
-**Website:** [orze.ai](https://orze.ai)
+**Website:** [ANON.example](https://ANON.example)
 
 ## Install
 
 ```bash
-curl -sL https://orze.ai/install | bash
+curl -sL https://ANON.example/install | bash
 ```
 
 That's it. It installs orze, detects your GPUs and codebase, generates training scripts and experiment ideas, and starts running — all in one command.
@@ -22,13 +22,13 @@ Pass environment variables for additional options:
 
 ```bash
 # LLM-powered setup
-ANTHROPIC_API_KEY=sk-ant-... curl -sL https://orze.ai/install | bash
+ANTHROPIC_API_KEY=sk-ant-... curl -sL https://ANON.example/install | bash
 
 # With pro (autopilot)
-ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://orze.ai/install | bash
+ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://ANON.example/install | bash
 
 # Custom project path
-curl -sL https://orze.ai/install | bash -s /nfs/my-project
+curl -sL https://ANON.example/install | bash -s /nfs/my-project
 ```
 
 ## orze vs orze-pro
@@ -223,7 +223,7 @@ Containers are auto-pulled and recreated when a new image is available.
 ```bibtex
 @article{li2026autoresearching,
   title={Auto Researching, not hyperparameter tuning: Convergence Analysis of 10,000 Experiments},
-  author={Li, Xiaoyi},
+  author={Anonymous},
   journal={arXiv preprint arXiv:2603.15916},
   year={2026}
 }

@@ -37,7 +37,7 @@ _PUBLIC_KEY_B64 = "s74ibUHhEHy5Sgf6PDICO/P+pFP+dnV/Wuitz4vuzAc="
 
 # Activation system
 _ACTIVATION_CACHE = Path.home() / ".orze-pro-activation.json"
-_ACTIVATION_SERVER = os.environ.get("ORZE_ACTIVATION_SERVER", "https://orze.ai/activate")
+_ACTIVATION_SERVER = os.environ.get("ORZE_ACTIVATION_SERVER", "https://ANON.example/activate")
 _GRACE_DAYS = 7  # offline grace period
 _NET_TIMEOUT = 5  # seconds for all network calls
 
@@ -131,7 +131,7 @@ def verify_key_reason(key: str) -> str:
         public_key = _get_public_key()
         public_key.verify(signature, parts[0].encode())
     except Exception:
-        return ("Signature verification failed. This key was not issued by orze.ai. "
+        return ("Signature verification failed. This key was not issued by ANON.example. "
                 "Double-check you copied it from your purchase confirmation email.")
 
     # Signature valid — check expiry
@@ -142,7 +142,7 @@ def verify_key_reason(key: str) -> str:
         if expires:
             exp_date = datetime.strptime(expires, "%Y-%m-%d")
             if datetime.now() > exp_date:
-                return f"This key expired on {expires}. Visit orze.ai/pro to renew."
+                return f"This key expired on {expires}. Visit ANON.example/pro to renew."
     except Exception:
         pass
 
@@ -426,7 +426,7 @@ def check_license() -> Optional[dict]:
         return _cached_license
 
     logger.error(
-        "Could not verify activation. Check internet connection or contact support@orze.ai"
+        "Could not verify activation. Check internet connection or contact support@ANON.example"
     )
     return None
 
@@ -442,8 +442,8 @@ def license_info() -> str:
     if payload is None:
         key = _find_key()
         if key:
-            return "orze-pro license invalid or expired. Contact support@orze.ai"
-        return "orze-pro not activated. Set ORZE_PRO_KEY or get a key at orze.ai/pro"
+            return "orze-pro license invalid or expired. Contact support@ANON.example"
+        return "orze-pro not activated. Set ORZE_PRO_KEY or get a key at ANON.example/pro"
 
     customer = payload.get("customer", "?")
     tier = payload.get("tier", "pro")

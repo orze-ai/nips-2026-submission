@@ -8,12 +8,12 @@ This skill covers cutting a new release for **orze** (basic) and **orze-pro** (p
 
 ### Release matrix (publish targets)
 
-| Package    | github (`ANON/<repo>`) | pypi.orze.ai (private) | pypi.org (public)         |
+| Package    | github (`ANON/<repo>`) | pypi.ANON.example (private) | pypi.org (public)         |
 |------------|:--:|:--:|:--:|
 | `orze`     | ✓ | ✓ | ✓ |
 | `orze-pro` | ✓ | ✓ | ✗ (proprietary — never publish to public PyPI) |
 
-A release is **not done** until **all required targets** for that package are live. For `orze`: github + pypi.orze.ai + pypi.org. For `orze-pro`: github + pypi.orze.ai. Skipping a target is a partial release — declare it as such.
+A release is **not done** until **all required targets** for that package are live. For `orze`: github + pypi.ANON.example + pypi.org. For `orze-pro`: github + pypi.ANON.example. Skipping a target is a partial release — declare it as such.
 
 ### Identity
 
@@ -116,24 +116,24 @@ print('OK' if not missing else f'MISSING: {missing}')
 
 ## Publish — orze (basic)
 
-`orze` ships to **two PyPI targets**: `pypi.orze.ai` (private, license-gated, used by `orze upgrade`'s in-org fallback path) and `pypi.org` (public, the canonical install for the open-source package). **Both are required** for a basic release; missing either is a partial release.
+`orze` ships to **two PyPI targets**: `pypi.ANON.example` (private, license-gated, used by `orze upgrade`'s in-org fallback path) and `pypi.org` (public, the canonical install for the open-source package). **Both are required** for a basic release; missing either is a partial release.
 
-### Target 1 — `pypi.orze.ai` (private, admin-uploaded)
+### Target 1 — `pypi.ANON.example` (private, admin-uploaded)
 
 ```bash
 TWINE_USERNAME='__admin__' \
 TWINE_PASSWORD="$ORZE_AI_ADMIN_TOKEN" \
-twine upload --repository-url 'https://pypi.orze.ai/' dist/orze-X.Y.Z*
+twine upload --repository-url 'https://pypi.ANON.example/' dist/orze-X.Y.Z*
 ```
 
 - Username is the literal string `__admin__`, **not** `__token__`.
-- `ORZE_AI_ADMIN_TOKEN` is the orze.ai admin upload credential (operator secrets store). Never confuse with a consumer license key (`ORZE-PRO-...`) — those grant read-only `simple/` access only.
+- `ORZE_AI_ADMIN_TOKEN` is the ANON.example admin upload credential (operator secrets store). Never confuse with a consumer license key (`ORZE-PRO-...`) — those grant read-only `simple/` access only.
 - Endpoint is the same root that serves `simple/` — twine handles the upload route.
 
 **Verify:**
 
 ```bash
-pip index versions orze --index-url "https://admin:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
+pip index versions orze --index-url "https://admin:${ORZE_PRO_KEY}@pypi.ANON.example/simple/"
 # Available versions: X.Y.Z
 ```
 
@@ -162,15 +162,15 @@ PyPI propagation takes 30–60s. If `pip install` reports an older version, wait
 
 ## Publish — orze-pro (pro)
 
-`orze-pro` is **proprietary** and ships to **github + `pypi.orze.ai` only**. **Never publish `orze-pro` to public PyPI** — the package is license-gated and the source is closed. The release matrix at the top of this skill enforces this; double-check before any `twine upload` that you are pointing at the private index, not the default `pypi.org`.
+`orze-pro` is **proprietary** and ships to **github + `pypi.ANON.example` only**. **Never publish `orze-pro` to public PyPI** — the package is license-gated and the source is closed. The release matrix at the top of this skill enforces this; double-check before any `twine upload` that you are pointing at the private index, not the default `pypi.org`.
 
-orze-pro is distributed via the license-gated private index `https://pypi.orze.ai/simple/`. Consumer installs are wired into orze itself — `orze upgrade`, `extensions._auto_install_pro`, and `engine/upgrade.py` all use the same URL pattern.
+orze-pro is distributed via the license-gated private index `https://pypi.ANON.example/simple/`. Consumer installs are wired into orze itself — `orze upgrade`, `extensions._auto_install_pro`, and `engine/upgrade.py` all use the same URL pattern.
 
 ### Consumer side (what users do — already wired into orze)
 
 ```bash
 pip install --upgrade orze-pro \
-    --extra-index-url "https://admin:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
+    --extra-index-url "https://admin:${ORZE_PRO_KEY}@pypi.ANON.example/simple/"
 ```
 
 `ORZE_PRO_KEY` resolution order (see `orze.extensions._find_pro_key`):
@@ -180,12 +180,12 @@ pip install --upgrade orze-pro \
 
 ### Publisher side (release engineer)
 
-Same `python -m build` step as basic. Then upload to `pypi.orze.ai` only:
+Same `python -m build` step as basic. Then upload to `pypi.ANON.example` only:
 
 ```bash
 TWINE_USERNAME='__admin__' \
 TWINE_PASSWORD="$ORZE_AI_ADMIN_TOKEN" \
-twine upload --repository-url 'https://pypi.orze.ai/' dist/orze_pro-X.Y.Z*
+twine upload --repository-url 'https://pypi.ANON.example/' dist/orze_pro-X.Y.Z*
 ```
 
 Do **not** add a `pypi.org` upload step. If a future change makes that necessary, it requires explicit, audited approval — orze-pro is closed-source software.
@@ -204,7 +204,7 @@ Or do a clean-venv install matching the consumer flow:
 ```bash
 python -m venv /tmp/pro-verify
 /tmp/pro-verify/bin/pip install --upgrade orze-pro \
-    --extra-index-url "https://admin:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
+    --extra-index-url "https://admin:${ORZE_PRO_KEY}@pypi.ANON.example/simple/"
 /tmp/pro-verify/bin/python -c "import orze_pro; print(orze_pro.__version__)"
 ```
 
@@ -244,9 +244,9 @@ orze (basic) — **all three required**:
 
 ```
 [ ] github push  (covered by `git push` above)
-[ ] pypi.orze.ai upload (TWINE_USERNAME=__admin__, TWINE_PASSWORD=$ORZE_AI_ADMIN_TOKEN, --repository-url https://pypi.orze.ai/)
+[ ] pypi.ANON.example upload (TWINE_USERNAME=__admin__, TWINE_PASSWORD=$ORZE_AI_ADMIN_TOKEN, --repository-url https://pypi.ANON.example/)
 [ ] pypi.org upload     (TWINE_USERNAME=__token__, TWINE_PASSWORD=$PYPI_TOKEN, default endpoint)
-[ ] Verified in clean venv from BOTH pypi.orze.ai and pypi.org
+[ ] Verified in clean venv from BOTH pypi.ANON.example and pypi.org
 [ ] (optional) gh release create vX.Y.Z, if gh available
 ```
 
@@ -254,8 +254,8 @@ orze-pro — **two required, never publish to pypi.org**:
 
 ```
 [ ] github push
-[ ] pypi.orze.ai upload (TWINE_USERNAME=__admin__, TWINE_PASSWORD=$ORZE_AI_ADMIN_TOKEN, --repository-url https://pypi.orze.ai/)
-[ ] Verified in clean venv with --extra-index-url "https://admin:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
+[ ] pypi.ANON.example upload (TWINE_USERNAME=__admin__, TWINE_PASSWORD=$ORZE_AI_ADMIN_TOKEN, --repository-url https://pypi.ANON.example/)
+[ ] Verified in clean venv with --extra-index-url "https://admin:${ORZE_PRO_KEY}@pypi.ANON.example/simple/"
 [ ] EXPLICITLY confirmed no `twine upload` ran without --repository-url (which would have hit pypi.org)
 ```
 

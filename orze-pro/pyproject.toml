@@ -19,7 +19,7 @@ authors = [{name = "orze contributors"}]
 dependencies = ["orze>=4.2.0", "cryptography>=41.0"]
 
 [project.urls]
-Homepage = "https://orze.ai"
+Homepage = "https://ANON.example"
 
 [tool.setuptools.packages.find]
 where = ["src"]

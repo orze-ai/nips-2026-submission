@@ -1,6 +1,6 @@
 # orze-pro — Autopilot for GPU Experiments
 
-[![PyPI](https://img.shields.io/badge/pypi-private-blue)](https://pypi.orze.ai/simple/orze-pro/)
+[![PyPI](https://img.shields.io/badge/pypi-private-blue)](https://pypi.ANON.example/simple/orze-pro/)
 [![Requires](https://img.shields.io/badge/requires-orze%20%E2%89%A54.0-green)](https://pypi.org/project/orze/)
 
 The intelligence layer for [orze](https://github.com/ANON/orze).
@@ -12,7 +12,7 @@ The intelligence layer for [orze](https://github.com/ANON/orze).
 ## Install
 
 ```bash
-ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://orze.ai/install | bash
+ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://ANON.example/install | bash
 ```
 
 That's it. It installs orze + orze-pro, initializes your project, and starts running.
@@ -93,4 +93,4 @@ Zero config change — same `orze.yaml`. Pro features activate on install.
 
 ## License
 
-Proprietary. Contact support@orze.ai for licensing.
+Proprietary. Contact support@ANON.example for licensing.

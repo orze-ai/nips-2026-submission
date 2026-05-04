@@ -6,5 +6,5 @@ def require_license():
     if not is_licensed():
         raise ImportError(
             "orze-pro is not activated. Set ORZE_PRO_KEY environment variable. "
-            "Get a license at orze.ai/pro"
+            "Get a license at ANON.example/pro"
         )

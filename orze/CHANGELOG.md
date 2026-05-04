@@ -19,7 +19,7 @@
 ## 4.1.0 — Unified install UX
 
 ### Changed
-- **One-line install is the single entry point** — `curl -sL https://orze.ai/install | bash` handles everything (packages, init, start)
+- **One-line install is the single entry point** — `curl -sL https://ANON.example/install | bash` handles everything (packages, init, start)
 - **`orze init` subcommand** replaces `orze --init` (deprecated with notice)
 - **GitHub org** changed from `ANON/orze` to `ANON/orze` everywhere
 - **README rewritten** — single install path, no confusing alternatives
@@ -56,12 +56,12 @@
 ## 4.0.5 — Release matrix in `@release` skill
 
 ### Changed
-- **`@release` skill now codifies the per-package publish matrix.** orze ships to **github + pypi.orze.ai + pypi.org** (all three required); orze-pro ships to **github + pypi.orze.ai only** (never to public PyPI — proprietary). Skill includes per-target `twine` commands with the correct `__admin__` vs `__token__` username, the right credential env var, and a final-checklist enforcement step that requires explicit confirmation before any orze-pro upload that no implicit `pypi.org` push happened.
+- **`@release` skill now codifies the per-package publish matrix.** orze ships to **github + pypi.ANON.example + pypi.org** (all three required); orze-pro ships to **github + pypi.ANON.example only** (never to public PyPI — proprietary). Skill includes per-target `twine` commands with the correct `__admin__` vs `__token__` username, the right credential env var, and a final-checklist enforcement step that requires explicit confirmation before any orze-pro upload that no implicit `pypi.org` push happened.
 
 ## 4.0.4 — Release skill + ship built-in skill files
 
 ### Added
-- **`@release` built-in skill** — new `src/orze/skills/release.skill.md` documenting the canonical release process for both **basic (orze → public PyPI)** and **pro (orze-pro → private `pypi.orze.ai`)**. Covers pre-flight checks, version bump, changelog, tag, build, twine upload, post-release verification, and the security pattern for handling license-key URLs. Loadable as `@release` from any role's `skills` list.
+- **`@release` built-in skill** — new `src/orze/skills/release.skill.md` documenting the canonical release process for both **basic (orze → public PyPI)** and **pro (orze-pro → private `pypi.ANON.example`)**. Covers pre-flight checks, version bump, changelog, tag, build, twine upload, post-release verification, and the security pattern for handling license-key URLs. Loadable as `@release` from any role's `skills` list.
 
 ### Fixed
 - **Built-in `.skill.md` files now ship in the wheel.** `[tool.setuptools.package-data]` previously listed only top-level `*.md` and `admin/ui/dist/**`, so `core.skill.md`, `ops.skill.md`, `research.skill.md`, `setup.skill.md` were absent from the published wheel. Editable installs hid the bug because they resolve to the source tree. Added `skills/*.skill.md` to package-data; verified with `zipfile.namelist()` on the built wheel.
@@ -70,7 +70,7 @@
 
 ### Fixed
 - **`orze upgrade` now actually upgrades** — previously it failed silently with `does not appear to be a Python project` because `submodule_search_locations[0].parent` resolved to `<repo>/src/` (no `pyproject.toml`) instead of the project root. Now walks up to the dir containing `pyproject.toml` / `setup.py`.
-- **Non-editable installs are handled** — when `orze` / `orze-pro` are installed normally (not `pip install -e`), `orze upgrade` falls back to `pip install --upgrade <pkg>`. For `orze-pro`, this uses the license-gated private PyPI (`https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/`) — same path as the daemon's auto-upgrade, so a paid user just needs `ORZE_PRO_KEY` set (env / `.env` / `~/.orze-pro.key`).
+- **Non-editable installs are handled** — when `orze` / `orze-pro` are installed normally (not `pip install -e`), `orze upgrade` falls back to `pip install --upgrade <pkg>`. For `orze-pro`, this uses the license-gated private PyPI (`https://__token__:${ORZE_PRO_KEY}@pypi.ANON.example/simple/`) — same path as the daemon's auto-upgrade, so a paid user just needs `ORZE_PRO_KEY` set (env / `.env` / `~/.orze-pro.key`).
 - **Uses the active interpreter's pip** — `sys.executable -m pip` instead of bare `pip3`, which previously resolved outside the venv ("Defaulting to user installation because normal site-packages is not writeable").
 - **Non-zero pip exit codes propagate** — `orze upgrade` no longer returns 0 when the underlying `pip install` fails.
 

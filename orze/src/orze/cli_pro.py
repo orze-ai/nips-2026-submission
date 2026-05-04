@@ -38,7 +38,7 @@ def pro_activate(key=None):
                 if resp != "y":
                     return
 
-        print("Enter your license key (get one at orze.ai/pro):")
+        print("Enter your license key (get one at ANON.example/pro):")
         try:
             key = input("> ").strip()
         except EOFError:
@@ -59,7 +59,7 @@ def pro_activate(key=None):
         print("  - Make sure you copied the entire key from your email")
         print("  - The key should start with ORZE-PRO- and contain a dot (.)")
         print("  - Run 'orze pro activate' and paste the key when prompted")
-        print("  - Contact support@orze.ai if the problem persists")
+        print("  - Contact support@ANON.example if the problem persists")
         return
 
     # Save key locally
@@ -155,7 +155,7 @@ def pro_deactivate(force=False):
                 print(f"Machine slot freed. Machines: {used}/{max_m}")
             else:
                 print("Could not reach activation server — slot may not be freed.")
-                print("Contact support@orze.ai if you need to free this slot manually.")
+                print("Contact support@ANON.example if you need to free this slot manually.")
         except Exception:
             pass
 

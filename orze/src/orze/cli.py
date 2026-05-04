@@ -518,7 +518,7 @@ Examples:
                         rc = _pip_install(
                             ["--upgrade", "orze-pro",
                              "--extra-index-url",
-                             f"https://admin:{pro_key}@pypi.orze.ai/simple/"],
+                             f"https://admin:{pro_key}@pypi.ANON.example/simple/"],
                             "orze-pro",
                         )
                 if rc != 0:

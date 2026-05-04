@@ -2,14 +2,14 @@
 # Orze — one-line setup
 #
 # Usage:
-#   curl -sL https://orze.ai/install | bash
-#   curl -sL https://orze.ai/install | bash -s /path/to/project
+#   curl -sL https://ANON.example/install | bash
+#   curl -sL https://ANON.example/install | bash -s /path/to/project
 #
 # With pro:
-#   ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://orze.ai/install | bash
+#   ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://ANON.example/install | bash
 #
 # With API key:
-#   GEMINI_API_KEY=AIza... curl -sL https://orze.ai/install | bash
+#   GEMINI_API_KEY=AIza... curl -sL https://ANON.example/install | bash
 set -euo pipefail
 
 GREEN='\033[0;32m'
@@ -97,14 +97,14 @@ fi
 
 if [ "$INSTALL_PRO" = true ]; then
     if [ -n "$PRO_KEY" ]; then
-        PRO_INDEX="--extra-index-url https://admin:${PRO_KEY}@pypi.orze.ai/simple/"
+        PRO_INDEX="--extra-index-url https://admin:${PRO_KEY}@pypi.ANON.example/simple/"
     else
         PRO_INDEX=""
     fi
     if ! $PYTHON -c "import orze_pro" </dev/null &>/dev/null; then
         info "Installing orze-pro..."
         $INSTALL_CMD orze-pro $PRO_INDEX </dev/null 2>&1 || {
-            warn "orze-pro install failed. Check your license key or visit orze.ai/pro"
+            warn "orze-pro install failed. Check your license key or visit ANON.example/pro"
         }
     else
         info "Upgrading orze-pro..."

@@ -1,7 +1,7 @@
 """orze-pro activation server.
 
 FastAPI app for managing license activations with per-key machine limits.
-Deploy behind a reverse proxy at orze.ai/activate.
+Deploy behind a reverse proxy at ANON.example/activate.
 
 Endpoints:
     POST /activate      — Activate a key on a machine

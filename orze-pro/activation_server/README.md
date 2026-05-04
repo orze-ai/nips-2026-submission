@@ -19,7 +19,7 @@ docker run -p 8000:8000 \
   orze-activation
 ```
 
-Put behind nginx/caddy at `orze.ai/activate` with TLS.
+Put behind nginx/caddy at `ANON.example/activate` with TLS.
 
 ## Endpoints
 

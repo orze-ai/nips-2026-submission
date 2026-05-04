@@ -1488,7 +1488,7 @@ def do_check(cfg: dict):
                 print(f"            may be overriding it. Remove 'roles: {{}}' or configure a research role")
         else:
             print(f"    \033[2mAI-powered idea generation, auto-fix, and code evolution\033[0m")
-            print(f"    \033[2mAvailable with orze-pro → orze.ai/pro\033[0m")
+            print(f"    \033[2mAvailable with orze-pro → ANON.example/pro\033[0m")
 
     # --- Validation ---
     errors, warnings = _validate_config(cfg)

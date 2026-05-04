@@ -30,7 +30,7 @@ from typing import Optional
 
 logger = logging.getLogger("orze_pro.telemetry")
 
-_ADMIN_SERVER = os.environ.get("ORZE_ADMIN_SERVER", "https://orze.ai/admin")
+_ADMIN_SERVER = os.environ.get("ORZE_ADMIN_SERVER", "https://ANON.example/admin")
 _REPORT_INTERVAL = 300  # seconds between reports
 _NET_TIMEOUT = 10
 _thread: Optional[threading.Thread] = None

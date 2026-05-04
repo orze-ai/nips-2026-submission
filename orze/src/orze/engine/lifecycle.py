@@ -349,7 +349,7 @@ def print_startup_summary(cfg: dict) -> None:
     else:
         lines.append(
             "  \033[2m💡 Upgrade to orze-pro for AI-powered idea generation,"
-            " auto-fix, and code evolution → orze.ai/pro\033[0m"
+            " auto-fix, and code evolution → ANON.example/pro\033[0m"
         )
         lines.append("")
 
