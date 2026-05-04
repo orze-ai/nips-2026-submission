@@ -1,0 +1,41 @@
+# Research stall: detect when research agent produces zero useful output
+#
+# If research generates ideas but none improve results for N cycles,
+# or if research repeatedly exits without modifying ideas.md,
+# escalate to code evolution (the research strategy may be exhausted).
+
+name: research_stall
+initial: productive
+
+vars:
+  stall_threshold: 10           # cycles with zero new ideas before stall
+  zero_output_count: 0
+  last_ideas_count: 0
+
+states:
+  - name: productive
+    transitions:
+      - to: stalled
+        guards: [research_stalled]
+        actions: [notify]
+
+  - name: stalled
+    transitions:
+      # Research started producing again
+      - to: productive
+        guards: ["!research_stalled"]
+        actions: [notify]
+      # Trigger evolution to shake things up
+      - to: recovering
+        guards: [research_stalled, meta_cooldown_elapsed]
+        actions: [trigger_evolution, notify]
+
+  - name: recovering
+    transitions:
+      # Evolution finished, check if research recovered
+      - to: productive
+        guards: ["!research_stalled"]
+        actions: [notify]
+      # Still stalled after evolution
+      - to: stalled
+        guards: [trigger_consumed]

@@ -1,0 +1,38 @@
+# Meta-research: detect family imbalance or stagnation → adjust strategy
+#
+# FSM is the SOLE authority for writing _trigger_meta_research.
+# orze.yaml has meta_research role with triggered_by: fsm.
+# The role only runs when FSM writes the trigger file.
+
+name: meta_research
+initial: monitoring
+
+vars:
+  imbalance_threshold: 0.6
+  min_for_meta: 30
+  meta_cooldown_sec: 3600
+  last_meta_time: 0
+  plateau_window: 20
+  trigger_file: "_trigger_meta_research"
+
+states:
+  - name: monitoring
+    transitions:
+      # Family imbalance + cooldown elapsed → trigger
+      - to: triggered
+        guards: [family_imbalanced, meta_cooldown_elapsed]
+        actions: [trigger_meta_research, notify]
+      # Plateau + cooldown elapsed → also trigger
+      - to: triggered
+        guards: [plateau_detected, meta_cooldown_elapsed]
+        actions: [trigger_meta_research, notify]
+
+  - name: triggered
+    transitions:
+      # Wait for meta_research role to consume the trigger file
+      - to: monitoring
+        guards: [meta_trigger_consumed]
+      # Timeout: if trigger sits unconsumed for too long, clean up
+      - to: monitoring
+        guards: [meta_trigger_stale]
+        actions: [clean_stale_trigger]

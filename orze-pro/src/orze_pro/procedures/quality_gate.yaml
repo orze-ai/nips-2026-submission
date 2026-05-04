@@ -1,0 +1,32 @@
+# Quality gate: pause research when too many experiments fail
+#
+# FSM is the SOLE authority for failure-rate-based pausing.
+# Coordinates with fix_escalation: quality_gate pauses, the engineer
+# (via fix_escalation's trigger_engineer_fix action) fixes.
+# If both want to pause, the sentinel is idempotent (write twice = same effect).
+
+name: quality_gate
+initial: healthy
+
+vars:
+  fail_window: 20
+  fail_threshold: 0.7
+
+states:
+  - name: healthy
+    transitions:
+      - to: degraded
+        guards: [failure_rate_high]
+        actions: [pause_research, notify]
+
+  - name: degraded
+    maintain: [pause_research]    # re-assert pause sentinel every tick (survives restarts)
+    transitions:
+      # Failure rate back to normal → resume
+      - to: healthy
+        guards: ["!failure_rate_high"]
+        actions: [unpause_research, notify]
+      # Deadlock escape
+      - to: healthy
+        guards: [is_deadlocked]
+        actions: [unpause_research, notify]

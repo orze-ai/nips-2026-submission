@@ -1,0 +1,28 @@
+[build-system]
+# setuptools >= 77 is required to parse the PEP 639 SPDX `license` string
+# ("LicenseRef-Proprietary") below. Older setuptools silently drops the
+# project metadata and writes a stub wheel named "UNKNOWN-0.0.0" —
+# onboarding users see no error, only a mystery package on pip list.
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orze-pro"
+version = "0.10.1"
+description = "Autopilot for GPU experiments — autonomous research agents for orze"
+readme = "README.md"
+license = "LicenseRef-Proprietary"
+requires-python = ">=3.9"
+authors = [{name = "orze contributors"}]
+# orze >= 4.0.0 is required — the .orze/ layout, unified init,
+# and do_interactive_init are 4.x-only features.
+dependencies = ["orze>=4.2.0", "cryptography>=41.0"]
+
+[project.urls]
+Homepage = "https://orze.ai"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+orze_pro = ["procedures/*.yaml", "sops/*.skill.md"]

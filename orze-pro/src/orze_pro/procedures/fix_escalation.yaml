@@ -1,0 +1,99 @@
+# Fix-escalation: autonomous detect → trigger engineer → verify → PR pipeline
+#
+# Monitors ALL roles for health issues AND experiment failure rates.
+# When something breaks:
+#   1. Diagnose the problem (read logs, configs, metrics)
+#   2. Trigger the engineer role (which bundles fix-bugs via
+#      @sop:engineer_fix_bugs) to fix it
+#   3. Verify the fix works
+#   4. Create branch, commit, push, and open a PR
+#
+# Subsumes the old bug_fixer + role_health procedures. Standalone
+# bug_fixer agent role has been merged into engineer.
+
+name: fix_escalation
+initial: healthy
+
+vars:
+  # Role health monitoring
+  monitored_roles: ["research", "professor", "fsm"]
+  role_grace_min: 15
+  unhealthy_roles: []
+  # Failure rate monitoring
+  fail_window: 10
+  fail_threshold: 0.5
+  # Fix budget
+  max_fixes_per_hour: 3
+  fixes_this_hour: 0
+  # Trigger file (the engineer picks this up via @sop:engineer_fix_bugs)
+  trigger_file: "_trigger_engineer"
+
+states:
+  - name: healthy
+    transitions:
+      # External (e.g. professor) authored an engineer trigger directly into
+      # results_dir, where role_runner does not watch. Forward it to the
+      # canonical triggers/ location and mark consumed. Skips diagnosing/
+      # trigger_engineer_fix (would overwrite the external author's content).
+      - to: fixing
+        guards: [external_engineer_trigger]
+        actions: [consume_external_engineer_trigger, notify]
+      # Any role unhealthy → diagnose and fix
+      - to: diagnosing
+        guards: [role_unhealthy]
+        actions: [record_diagnosis, notify]
+      # High experiment failure rate → diagnose and fix
+      - to: diagnosing
+        guards: [failure_rate_high]
+        actions: [record_pre_fix_state, record_diagnosis, notify]
+
+  - name: diagnosing
+    transitions:
+      # Budget available → trigger the fixer agent
+      - to: fixing
+        guards: ["!engineer_fixes_exhausted"]
+        actions: [trigger_engineer_fix]
+      # No budget left → back off
+      - to: backing_off
+        guards: [engineer_fixes_exhausted]
+        actions: [notify]
+
+  - name: fixing
+    transitions:
+      # Fixer agent completed (trigger consumed) + problem resolved
+      - to: verifying
+        guards: [fix_trigger_consumed]
+      # Fixer timed out (trigger stale >20min)
+      - to: healthy
+        guards: [fix_trigger_stale]
+        actions: [clean_fix_trigger, notify]
+
+  - name: verifying
+    transitions:
+      # Everything healthy again → success
+      - to: healthy
+        guards: [roles_healthy, "!failure_rate_high"]
+        actions: [reset_fix_counter, notify]
+      # Still broken → retry if budget allows
+      - to: diagnosing
+        guards: [role_unhealthy]
+        actions: [record_diagnosis, notify]
+      - to: diagnosing
+        guards: [failure_rate_high]
+        actions: [record_pre_fix_state, record_diagnosis, notify]
+      # Nothing detected but not fully healthy yet — give it time
+      # (roles may need one more cycle to show as healthy)
+      - to: healthy
+        guards: ["!role_unhealthy", "!failure_rate_high"]
+        actions: [reset_fix_counter, notify]
+
+  - name: backing_off
+    transitions:
+      # Problems resolved on their own
+      - to: healthy
+        guards: [roles_healthy, "!failure_rate_high"]
+        actions: [reset_fix_counter, notify]
+      # Deadlock escape
+      - to: healthy
+        guards: [is_deadlocked]
+        actions: [reset_fix_counter, notify]

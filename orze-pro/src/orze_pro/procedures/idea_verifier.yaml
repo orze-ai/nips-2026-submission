@@ -1,0 +1,45 @@
+# Idea verifier: two-tier filtering to prevent GPU waste
+#
+# Tier 1 (rule-based, every tick): exact duplicates + proven-dead configs
+# Tier 2 (LLM Professor, periodic): nuanced review with full context
+#
+# Saves ~75% of GPU time based on observed 74% garbage rate.
+
+name: idea_verifier
+initial: watching
+
+vars:
+  total_filtered: 0
+  last_filtered_count: 0
+  total_reviewed: 0
+  last_review_count: 0
+
+states:
+  - name: watching
+    transitions:
+      # Tier 1: garbage detected → filter it
+      - to: filtering
+        guards: [has_garbage_ideas]
+        actions: [filter_garbage_ideas, notify]
+
+      # Tier 2: unreviewed ideas + LLM available → Professor review
+      - to: reviewing
+        guards: [has_unreviewed_ideas, has_llm_api_key]
+        actions: [run_professor_review, notify]
+
+  - name: filtering
+    transitions:
+      # After filtering, check if Professor review is also needed
+      - to: reviewing
+        guards: [has_unreviewed_ideas, has_llm_api_key]
+        actions: [run_professor_review, notify]
+
+      # Otherwise return to watching
+      - to: watching
+        guards: [always]
+
+  - name: reviewing
+    transitions:
+      # Always return to watching after review
+      - to: watching
+        guards: [always]

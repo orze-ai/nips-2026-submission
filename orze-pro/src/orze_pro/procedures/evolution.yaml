@@ -1,0 +1,54 @@
+# Evolution loop: plateau detection → code evolution → retry/pause → deadlock break
+#
+# FSM is the SOLE authority for:
+#   - Writing _trigger_code_evolution
+#   - Writing/removing .pause_research (for plateau reasons)
+#   - Counting evolution attempts
+#
+# orze.yaml has: evolution.enabled=false, auto_pause=false
+# so orze's retrospection only detects — never dispatches.
+
+name: evolution
+initial: exploring
+
+vars:
+  plateau_window: 20
+  max_attempts: 1000
+  evolution_attempts: 0
+  best_accuracy: 0.0
+  best_at_completion: 0
+  trigger_file: "_trigger_code_evolution"
+
+states:
+  - name: exploring
+    on_enter: [update_best]
+    transitions:
+      - to: evolving
+        guards: [plateau_detected]
+        actions: [trigger_evolution, notify]
+
+  - name: evolving
+    transitions:
+      # Improvement detected → back to exploring
+      - to: exploring
+        guards: [has_improvement]
+        actions: [reset_attempts, update_best, unpause_research]
+      # Evolution cycle finished, no improvement, can retry
+      - to: evolving
+        guards: [trigger_consumed, attempts_remaining]
+        actions: [trigger_evolution]
+      # Evolution cycle finished, no improvement, exhausted
+      - to: paused
+        guards: [trigger_consumed, attempts_exhausted]
+        actions: [pause_research, notify]
+
+  - name: paused
+    transitions:
+      # Something improved (e.g., evolution ideas worked) → resume
+      - to: exploring
+        guards: [has_improvement]
+        actions: [reset_attempts, update_best, unpause_research, notify]
+      # Deadlock: paused + nothing running + empty queue
+      - to: exploring
+        guards: [is_deadlocked]
+        actions: [reset_attempts, unpause_research, notify]

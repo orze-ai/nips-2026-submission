@@ -1,0 +1,16 @@
+# Activity logger: parse orze.log into structured JSONL events
+# Runs every tick, parses new log lines into _fsm_activity.jsonl
+
+name: activity_log
+initial: logging
+
+vars:
+  _last_log_size: 0
+  _total_events_parsed: 0
+
+states:
+  - name: logging
+    transitions:
+      - to: logging
+        guards: [new_log_lines]
+        actions: [parse_role_activity]

@@ -1,0 +1,44 @@
+# Experiment outputs
+results/
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+/dist/
+build/
+
+# Keep admin UI build output
+!src/orze/admin/ui/dist/
+
+# Config (may contain secrets)
+orze.yaml
+.env
+
+# User-generated
+ideas.md
+idea_lake.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Virtual environments
+venv/
+.venv/
+
+# Node
+node_modules/
+
+# Misc
+*.tmp
+*.log
+*.pt

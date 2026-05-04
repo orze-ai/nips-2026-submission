@@ -1,0 +1,11 @@
+
+# Key generation (private key - NEVER publish)
+keygen.py
+keys.db
+*.pyc
+__pycache__/
+
+dist/
+build/
+*.egg-info/
+build/

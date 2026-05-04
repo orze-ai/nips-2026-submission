@@ -1,0 +1,268 @@
+# orze.yaml — Project configuration for orze experiment orchestrator
+# Copy this file to your project root as orze.yaml and customize.
+# See RULES.md for full documentation.
+
+# --- Scripts and paths ---
+train_script: train_idea.py          # your training script
+ideas_file: ideas.md                 # experiment definitions
+base_config: configs/base.yaml      # base config passed to training
+results_dir: results                 # output directory
+python: python3                      # python interpreter (use venv path)
+
+# --- Extra args/env for training script ---
+# Appended to: python train_script --idea-id X --results-dir Y --ideas-md Z --config W
+train_extra_args: []
+#  - "--data-dir"
+#  - "/path/to/data"
+
+train_extra_env: {}
+#  TORCH_HOME: /path/to/cache
+#  HF_HOME: /path/to/hf_cache
+
+# --- Timeouts ---
+timeout: 3600                        # max training time (seconds)
+poll: 30                             # loop interval (seconds)
+gpu_mem_threshold: 2000              # GPU memory (MiB) to consider "in use"
+
+# --- Health monitoring (0 = disabled) ---
+stall_minutes: 0                     # kill if no log growth for N minutes
+max_idea_failures: 0                 # skip idea after N failures
+max_fix_attempts: 0                  # LLM fix attempts per failed idea (0 = disabled)
+min_disk_gb: 0                       # pause launches if disk < N GB free
+orphan_timeout_hours: 0              # reclaim orphaned claims after N hours
+
+# --- Executor LLM fix (optional) ---
+# When max_fix_attempts > 0, failed ideas are sent to an LLM for diagnosis.
+# The LLM can modify project files (scripts, configs, utilities)
+# to fix the error, then the idea is automatically retried.
+# executor_fix:
+#   model: sonnet                    # LLM model for fix attempts
+#   claude_bin: claude               # path to Claude CLI
+#   timeout: 300                     # max time per fix attempt (seconds)
+
+# --- Checkpoint garbage collection (optional) ---
+# Deletes checkpoint dirs for non-top experiments to free disk space.
+# Runs during the periodic cleanup cycle (every cleanup.interval iterations).
+# gc:
+#   enabled: true
+#   checkpoints_dir: checkpoints         # where model checkpoints are saved
+#   keep_top: 50                         # keep top N by primary_metric
+#   keep_recent: 20                      # also keep N most recently completed
+#   min_free_gb: 100                     # only run GC when disk free < this (0 = always)
+
+# --- Pre-training hook (optional) ---
+# Runs before each training launch. Exit 0 = proceed, non-zero = skip idea.
+# Use for: feature extraction check, config validation, disk space check.
+# pre_script: check_features.py
+# pre_args: ["--idea-id", "{idea_id}", "--gpu", "{gpu}"]
+# pre_timeout: 3600
+
+# --- Post-training evaluation (optional) ---
+# eval_script: evaluate.py
+# eval_args: ["--idea-id", "{idea_id}", "--gpu", "{gpu}"]
+# eval_timeout: 3600
+# eval_output: eval_report.json      # skip eval if this file exists
+
+# --- Additional post-training scripts (optional) ---
+# Run after eval. Each entry: {script, args, timeout, output, name}
+# post_scripts:
+#   - name: overlay
+#     script: generate_overlay.py
+#     args: ["--idea-id", "{idea_id}"]
+#     timeout: 1800
+#     output: overlay_done.json       # skip if exists
+#   - name: export
+#     script: export_model.py
+#     args: ["--idea-id", "{idea_id}"]
+#     timeout: 600
+
+# --- Agent roles (optional) ---
+# Each role is an independently scheduled agent that runs alongside training.
+# Each gets its own cooldown, timeout, lock, state, and log directory.
+# Two modes: "claude" (Claude CLI) or "script" (any Python script / LLM API).
+#
+# You can run MULTIPLE research agents in parallel using different LLMs.
+# Each reads the same results/ and ideas.md — orze trains everything they produce.
+#
+# roles:
+#
+#   # --- Multi-LLM research army ---
+#   # ZERO CONFIG: If you don't configure any research roles below, orze
+#   # auto-discovers API keys from environment (GEMINI_API_KEY, OPENAI_API_KEY,
+#   # ANTHROPIC_API_KEY) and creates research agents automatically.
+#   #
+#   # For explicit control, use mode: research with a backend name.
+#   # Supported backends: gemini, openai, anthropic, ollama, custom
+#
+#   research:                            # Claude — web search + code generation
+#     mode: claude
+#     # Optional: if the primary LLM backend hits a quota signal, orze-claude
+#     # (the shim) will transparently re-dispatch to these backends in order.
+#     # Requires the corresponding API key env var to be set.
+#     # Equivalent env var: ORZE_CLAUDE_FALLBACK="gemini,codex".
+#     # fallback_backends: [gemini, codex]
+#     rules_file: RESEARCH_RULES.md       # single file (legacy)
+#     # --- OR use composable skills ---
+#     # skills:                            # list of prompt fragments
+#     #   - @core                          # built-in: idea format, contracts
+#     #   - @research                      # built-in: best practices
+#     #   - ./RESEARCH_RULES.md            # project-specific rules
+#     model: sonnet                      # sonnet, opus, haiku
+#     cooldown: 300
+#     timeout: 600
+#     allowed_tools: "Read,Write,Edit,Glob,Grep,Bash,WebSearch,WebFetch"
+#
+#   research_gemini:                     # Gemini
+#     mode: research
+#     backend: gemini
+#     env:
+#       GEMINI_API_KEY: "your-key"
+#
+#   research_gpt:                        # GPT
+#     mode: research
+#     backend: openai
+#     model: gpt-4o                      # optional, defaults to gpt-4o
+#     env:
+#       OPENAI_API_KEY: "sk-..."
+#
+#   research_local:                      # Local Ollama — free, no API key
+#     mode: research
+#     backend: ollama
+#     model: llama3
+#     cooldown: 120
+#
+#   # Optional mode: research settings:
+#   #   model: "model-name"             # override default model
+#   #   endpoint: "http://..."          # for ollama/custom backends
+#   #   num_ideas: 5                    # ideas per cycle (default: 5)
+#   #   rules_file: RESEARCH_RULES.md  # project-specific guidance
+#
+#   # --- Other agent types ---
+#
+#   documenter:                          # auto-generate docs from results
+#     mode: claude
+#     rules_file: DOCUMENTER_RULES.md
+#     cooldown: 600
+#     timeout: 300
+#     model: haiku
+#
+#   analyzer:                            # custom analysis script
+#     mode: script
+#     script: analysis_agent.py
+#     args: ["--results-dir", "{results_dir}", "--cycle", "{cycle}"]
+#     timeout: 600
+#     cooldown: 300
+#
+#   analyst_bridge:                      # Convert data-analyst insights
+#     mode: script                        # into queued ideas (no LLM).
+#     script: -m orze.agents.analyst_bridge
+#     args: ["--results-dir", "{results_dir}", "--ideas-file", "{ideas_file}"]
+#     cooldown: 1800
+#     timeout: 120
+#
+#   search:                              # F15 tight-loop post-hoc search
+#     mode: script                        # Proposes agg_search / bundle_combine
+#     script: -m orze.agents.search_role  # ideas from the ArtifactCatalog.
+#     args: ["--results-dir", "{results_dir}"]
+#     cooldown: 30
+#     timeout: 600
+#
+# F13 cross-host fleet (optional): lets the scheduler dispatch cheap
+# inference-only kinds (posthoc_eval / tta_sweep / bundle_combine /
+# agg_search) to the least-loaded GPU across the fleet. Training kinds
+# stay host-pinned. Only the leader's scheduler issues remote work.
+# hosts:
+#   - localhost
+#   - ip-172-31-81-194.ec2.internal
+#
+# F14 champion-promotion guard: re-verifies new_best claims + refuses
+# >z_threshold jumps, enqueueing a kind='audit' idea instead.
+# champion_guard:
+#   enabled: true
+#   z_threshold: 4.0
+#   min_history: 10
+#
+# Template variables available in args: {cycle}, {ideas_file}, {results_dir}
+#
+# Legacy: top-level "research:" still works (auto-migrated to roles.research)
+# research:
+#   mode: claude
+#   rules_file: RESEARCH_RULES.md
+#   cooldown: 300
+#   timeout: 600
+
+# --- Notifications (optional) ---
+# Push updates to Telegram, Slack, Discord, or any webhook.
+#
+# Events:
+#   completed      — experiment finished successfully
+#   failed         — experiment failed
+#   new_best       — new leaderboard #1
+#   report         — periodic leaderboard summary
+#   started        — orze started (always delivered)
+#   shutdown       — orze shutting down (always delivered)
+#   heartbeat      — periodic status pulse (always delivered)
+#   milestone      — every N completions (always delivered)
+#   disk_warning   — low disk space (always delivered)
+#   stall          — training timeout/stall/OOM (always delivered)
+#   role_summary   — research agent finished (always delivered)
+#
+# notifications:
+#   enabled: true
+#   on: [completed, failed, new_best]  # global event filter
+#   heartbeat_interval: 1800           # seconds between heartbeats (0=off)
+#   milestone_every: 100               # notify every N completions (0=off)
+#   report_interval: 0                 # seconds between report summaries (0=off)
+#   channels:
+#     - type: telegram
+#       bot_token: "123456:ABC-DEF"
+#       chat_id: "-100123456789"
+#     - type: slack
+#       webhook_url: "https://hooks.slack.com/services/T.../B.../xxx"
+#       on: [new_best, failed]         # per-channel override
+#     - type: discord
+#       webhook_url: "https://discord.com/api/webhooks/123/abc"
+#     - type: webhook                  # generic JSON POST
+#       url: "https://example.com/hook"
+#       headers:
+#         Authorization: "Bearer tok"
+
+# --- Telegram bot (optional) ---
+# Bidirectional companion: text back to the Telegram bot in natural language.
+# Runs as a separate process: python orze/bot.py -c orze.yaml
+# Uses bot_token/chat_id from notifications.channels[telegram] by default.
+# telegram_bot:
+#   mode: claude              # or "script" for GPT/Gemini/local
+#   model: sonnet             # claude model
+#   allowed_tools: "Read,Glob,Grep,Bash"
+#   timeout: 120              # max LLM response time (seconds)
+#   rate_limit: 10            # max messages per minute
+#   poll_timeout: 30          # getUpdates long-poll seconds
+#   # bot_token: "..."        # override (falls back to notifications config)
+#   # chat_id: "..."          # override; also used for auth
+#   # For mode: script
+#   # script: my_bot_handler.py
+#   # args: ["--message", "{message}"]
+#   # env:
+#   #   OPENAI_API_KEY: sk-...
+
+# --- Garbage collection (optional) ---
+# cleanup:
+#   interval: 100                     # run every N iterations
+#   patterns:                         # glob patterns to delete from result dirs
+#     - "checkpoint_epoch*.pt"
+#     - "*.tmp"
+#   script: scripts/cleanup.py        # custom cleanup script
+#   timeout: 300
+
+# --- Report configuration ---
+report:
+  title: "Orze Report"
+  primary_metric: test_accuracy      # sort leaderboard by this
+  sort: descending                   # or "ascending"
+  columns:
+    - {key: "test_accuracy", label: "Accuracy", fmt: ".4f"}
+    - {key: "test_loss", label: "Loss", fmt: ".4f"}
+    - {key: "training_time", label: "Time(s)", fmt: ".0f"}
+    # Read from other JSON files:
+    # - {key: "auc", label: "AUC", fmt: ".4f", source: "eval.json:metrics.auc"}

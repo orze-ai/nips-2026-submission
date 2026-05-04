@@ -1,0 +1,623 @@
+"""Config loading, validation, merging, and sanitization for Orze projects.
+
+CALLING SPEC:
+    DEFAULT_CONFIG -> dict
+        Module-level dict with all default orze.yaml keys and their defaults.
+
+    load_project_config(path: Optional[str] = None) -> dict
+        Load orze.yaml (or path), merge with DEFAULT_CONFIG, auto-discover
+        research backends from env vars, load .env. Returns full config dict.
+
+    _validate_config(cfg: dict) -> tuple[list[str], list[str]]
+        Validate a loaded config. Returns (errors, warnings) where errors
+        are fatal and warnings are informational.
+
+    _sanitize_config(config: dict) -> dict
+        Deep-copy config and replace invalid non-numeric values in known
+        numeric fields (e.g. sequence_length, batch_size) with safe defaults.
+
+    find_dotenv(config_path: Optional[str] = None) -> Optional[Path]
+        Locate .env file next to config or in CWD. Returns path or None.
+
+    _load_dotenv(config_path: Optional[str] = None) -> int
+        Load .env into os.environ (only sets vars not already present).
+        Returns count of vars loaded.
+"""
+import os
+import re
+import logging
+import copy
+from typing import Optional
+from pathlib import Path
+import yaml
+
+logger = logging.getLogger("orze")
+
+import sys
+
+_ENV_VAR_RE = re.compile(r"\$\{([^}]+)\}")
+
+# Canonical claude-mode role skill defaults. Users who declare one of these
+# roles with ``mode: claude`` but omit ``skills:`` get the bundled SOP stack
+# auto-injected instead of a hard config error. Keep in sync with the lists
+# in orze_pro.engine.role_runner — this registry is the user-facing
+# self-healing layer so projects that override (e.g. pin a different model)
+# don't have to restate every skill.
+CANONICAL_CLAUDE_SKILL_DEFAULTS: dict = {
+    "professor": [
+        "@sop:file_layout",
+        "@sop:professor_base",
+        "@sop:professor_paper_lake",
+        "@sop:professor_web_search",
+        "@sop:professor_cross_domain_query",
+        "@sop:professor_idea_review",
+        "@sop:professor_diversity_enforcement",
+        "@sop:professor_gap_closure",
+        "@sop:professor_strategy_review",
+        "@sop:professor_regression_detection",
+        "@sop:professor_steering",
+    ],
+    "thinker": [
+        "@sop:file_layout",
+        "@sop:thinker_synthesis",
+        "@sop:thinker_base",
+        "@sop:thinker_phase_a_reformulation",
+        "@sop:thinker_phase_b_root_cause",
+        "@sop:thinker_axiom_removal",
+        "@sop:thinker_phase_c_constraints",
+        "@sop:thinker_phase_d_cross_domain",
+        "@sop:thinker_phase_e_proposals",
+        "@sop:thinker_phase_f_implementation",
+    ],
+    "data_analyst": [
+        "@sop:file_layout",
+        "@sop:data_analyst_base",
+        "@sop:data_analyst_error_analysis",
+        "@sop:data_analyst_visualization",
+        "@sop:data_analyst_insights",
+        "@sop:data_analyst_anomaly_hypotheses",
+    ],
+    "engineer": [
+        "@sop:file_layout",
+        "@sop:engineer_base",
+        "@sop:engineer_implement",
+        "@sop:engineer_fix_bugs",
+    ],
+}
+
+
+def _expand_env_vars(obj):
+    """Recursively expand ${VAR} references in string values using os.environ."""
+    if isinstance(obj, str):
+        def _replace(m):
+            return os.environ.get(m.group(1), m.group(0))
+        return _ENV_VAR_RE.sub(_replace, obj)
+    if isinstance(obj, dict):
+        return {k: _expand_env_vars(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_expand_env_vars(item) for item in obj]
+    return obj
+
+
+def find_dotenv(config_path: Optional[str] = None) -> Optional[Path]:
+    """Find .env file: next to config or CWD. Returns path or None."""
+    candidates = []
+    if config_path:
+        candidates.append(Path(config_path).resolve().parent / ".env")
+    candidates.append(Path.cwd() / ".env")
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+def _load_dotenv(config_path: Optional[str] = None) -> int:
+    """Load .env file. Only sets vars NOT already in os.environ. Returns count loaded."""
+    env_file = find_dotenv(config_path)
+
+    if not env_file:
+        return 0
+
+    loaded = 0
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[7:]
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if key and not os.environ.get(key):
+            os.environ[key] = value
+            loaded += 1
+
+    if loaded:
+        logger.info("Loaded %d env var(s) from %s", loaded, env_file)
+    return loaded
+
+
+DEFAULT_CONFIG = {
+    "train_script": "train.py",
+    "ideas_file": None,  # None = derive to {orze_dir}/ideas.md
+    "base_config": "configs/base.yaml",
+    "results_dir": "orze_results",
+    "python": sys.executable,
+    "train_extra_args": [],
+    "train_extra_env": {},
+    "timeout": 3600,
+    "poll": 30,
+    "gpu_mem_threshold": 2000,
+    "gpu_scheduling": {
+        "max_vram_pct": 90,        # stop filling GPU at this VRAM %
+        "min_free_vram_mib": 1000, # require this much free VRAM
+        "max_jobs_per_gpu": 1,     # safety cap (1 = backward compat)
+    },
+    "pre_script": None,
+    "pre_args": [],
+    "pre_timeout": 3600,
+    "eval_script": None,
+    "eval_args": [],
+    "eval_timeout": 3600,
+    "eval_output": "eval_report.json",
+    "post_scripts": [],
+    "cleanup": {
+        "script": None,
+        "interval": 100,
+        "patterns": [],
+    },
+    "report": {
+        "title": "Orze Report",
+        "primary_metric": "test_accuracy",
+        "sort": "descending",
+        "columns": [
+            {"key": "test_accuracy", "label": "Accuracy", "fmt": ".4f"},
+            {"key": "test_loss", "label": "Loss", "fmt": ".4f"},
+            {"key": "training_time", "label": "Time(s)", "fmt": ".0f"},
+        ],
+        "ceiling_k": 20,
+        "ceiling_std_threshold": 0.015,
+        "ceiling_min_ideas": 30,
+    },
+    "stall_minutes": 0,         # 0 = disabled
+    "max_idea_failures": 0,     # 0 = disabled (never skip)
+    "max_fix_attempts": 0,      # 0 = disabled; executor LLM fix attempts per idea
+    "min_disk_gb": 0,           # 0 = disabled
+    "orphan_timeout_hours": 6,  # reclaim stale claims after 6 hours
+    "plateau_threshold": 50,    # fire plateau notification after N completions w/o improvement
+    "roles": {},
+    "auto_upgrade": True,
+    "sweep_stray": True,        # sweep stray files to .orze/stray/ by default
+    # Data boundary guardrails. When any prefix is declared here, orze
+    # launches training via orze.data_boundaries.wrap, which monkey-patches
+    # builtins.open() to abort on reads of forbidden paths (data leakage).
+    "data_boundaries": {
+        "forbidden_in_training": [],  # list[str] — abort training on read
+        "watch_paths": [],            # list[str] — log-only audit
+    },
+    # Auto-seal eval scripts. When true, any file matching eval_*.py or
+    # eval_*.sh in the project root is added to sealed_files at config
+    # load time, preventing silent mutation by LLM agents.
+    "auto_seal_eval": True,
+    "notifications": {
+        "enabled": False,
+        "on": ["completed", "failed", "new_best", "watchdog_restart", "plateau", "needs_intervention"],
+        "channels": [],
+    },
+    "retrospection": {
+        "enabled": False,
+        "script": "",
+        "interval": 50,
+        "timeout": 120,
+    },
+}
+def load_project_config(path: Optional[str] = None) -> dict:
+    """Load orze.yaml and merge with defaults. Returns full config dict."""
+    _load_dotenv(path)
+    cfg = copy.deepcopy(DEFAULT_CONFIG)
+
+    if not path and Path("orze.yaml").exists():
+        path = "orze.yaml"
+
+    if path and Path(path).exists():
+        raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        for k, v in raw.items():
+            if k == "report" and isinstance(v, dict):
+                cfg["report"] = {**cfg["report"], **v}
+            else:
+                cfg[k] = v
+        # Fix YAML 'on:' boolean parsing — YAML interprets 'on' as True
+        # so notifications.on becomes notifications[True] instead of notifications["on"]
+        ncfg = cfg.get("notifications")
+        if isinstance(ncfg, dict) and True in ncfg and "on" not in ncfg:
+            ncfg["on"] = ncfg.pop(True)
+            logger.info("Fixed YAML 'on:' boolean key in notifications config")
+
+        logger.info("Loaded config from %s", path)
+    elif path:
+        logger.warning("Config file %s not found, using defaults", path)
+
+    # Expand ${VAR} references in config values using os.environ
+    cfg = _expand_env_vars(cfg)
+
+    # Migrate legacy research: into roles: dict
+    if "research" in cfg and isinstance(cfg["research"], dict):
+        logger.warning("Migrating legacy 'research:' config to 'roles: {research: ...}'. "
+                        "Update orze.yaml to use the 'roles:' format directly.")
+        if not cfg.get("roles"):
+            cfg["roles"] = {"research": cfg["research"]}
+        elif "research" not in cfg["roles"]:
+            cfg["roles"]["research"] = cfg["research"]
+
+    # Compute project_root and orze_dir from results_dir
+    results_path = Path(cfg["results_dir"])
+    if not results_path.is_absolute():
+        results_path = Path.cwd() / results_path
+    project_root = results_path.parent
+    orze_dir = project_root / ".orze"
+    
+    cfg["_orze_dir"] = str(orze_dir)
+    cfg["_project_root"] = str(project_root)
+    
+    # Resolve ideas_file: None → .orze/ideas.md
+    if not cfg.get("ideas_file"):
+        cfg["ideas_file"] = str(orze_dir / "ideas.md")
+    
+    # Resolve idea_lake_db default → .orze/idea_lake.db (NOT results_dir)
+    if not cfg.get("idea_lake_db"):
+        cfg["idea_lake_db"] = str(orze_dir / "idea_lake.db")
+    
+    # Environment variable exposures for subprocess injection
+    cfg["_env_ORZE_DIR"] = str(orze_dir)
+    cfg["_env_ORZE_RESULTS_DIR"] = str(results_path)
+    cfg["_env_ORZE_IDEAS_FILE"] = cfg["ideas_file"]
+    cfg["_env_ORZE_RULES_DIR"] = str(orze_dir / "rules")
+    cfg["_env_ORZE_METHODS_DIR"] = str(results_path / "methods")
+    cfg["_env_ORZE_KNOWLEDGE_DIR"] = str(results_path / "knowledge")
+    cfg["_env_ORZE_FEEDBACK_DIR"] = str(orze_dir / "feedback")
+
+    # Auto-discover research backends from environment API keys.
+    # Only activates if NO roles are explicitly configured at all.
+    # If the user defined any roles (even mode: script), respect that
+    # and don't inject auto-discovered backends alongside them.
+    roles = cfg.get("roles") or {}
+    if not roles:
+        _AUTO_BACKENDS = [
+            ("GEMINI_API_KEY", "gemini", "gemini-2.5-flash"),
+            ("OPENAI_API_KEY", "openai", "gpt-4o"),
+            ("ANTHROPIC_API_KEY", "anthropic", None),
+        ]
+        discovered = []
+        for env_var, backend, default_model in _AUTO_BACKENDS:
+            if os.environ.get(env_var):
+                role_name = f"research_{backend}"
+                role_cfg = {"mode": "research", "backend": backend}
+                if default_model:
+                    role_cfg["model"] = default_model
+                if "roles" not in cfg:
+                    cfg["roles"] = {}
+                cfg["roles"][role_name] = role_cfg
+                discovered.append(f"{backend} ({env_var})")
+        if discovered:
+            logger.info("Auto-discovered research backends: %s",
+                        ", ".join(discovered))
+        else:
+            logger.info("No API keys found in environment — research agent will not run. "
+                        "Add GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY to .env")
+
+    # Auto-seal eval scripts (data leakage guardrail). Any file in the project
+    # root matching eval_*.py or eval_*.sh is added to sealed_files unless
+    # auto_seal_eval is explicitly set to false.
+    if cfg.get("auto_seal_eval", True):
+        sealed = list(cfg.get("sealed_files") or [])
+        existing = set(sealed)
+        auto_added = []
+        try:
+            for pattern in ("eval_*.py", "eval_*.sh"):
+                for match in sorted(Path(".").glob(pattern)):
+                    name = str(match)
+                    if name not in existing:
+                        sealed.append(name)
+                        existing.add(name)
+                        auto_added.append(name)
+        except Exception as e:
+            logger.warning("auto_seal_eval glob failed: %s", e)
+        if auto_added:
+            cfg["sealed_files"] = sealed
+            logger.info("auto_seal_eval: sealed %d eval script(s): %s",
+                        len(auto_added), ", ".join(auto_added))
+
+    return cfg
+
+
+def _validate_config(cfg: dict) -> tuple:
+    """Validate orze config on startup. Returns (errors, warnings) tuple."""
+    errors = []
+    warnings = []
+
+    # --- Errors: things that will break ---
+
+    # Validate roles
+    roles = cfg.get("roles")
+    if roles and isinstance(roles, dict):
+        for rname, rcfg in roles.items():
+            if not isinstance(rcfg, dict):
+                errors.append(f"roles.{rname}: expected dict, got {type(rcfg).__name__}")
+                continue
+            mode = rcfg.get("mode", "script")
+            if mode not in ("script", "claude", "research"):
+                errors.append(f"roles.{rname}.mode: '{mode}' is invalid "
+                              f"(expected 'script', 'claude', or 'research')")
+            if mode == "claude" and not rcfg.get("skills"):
+                default_skills = CANONICAL_CLAUDE_SKILL_DEFAULTS.get(rname)
+                if default_skills:
+                    rcfg["skills"] = list(default_skills)
+                    warnings.append(
+                        f"roles.{rname}: no 'skills' set — auto-injected "
+                        f"{len(default_skills)} canonical SOPs for known role "
+                        f"'{rname}'")
+                else:
+                    errors.append(
+                        f"roles.{rname}: mode 'claude' requires 'skills' "
+                        f"(no canonical defaults for role name '{rname}'; "
+                        f"known canonicals: "
+                        f"{', '.join(sorted(CANONICAL_CLAUDE_SKILL_DEFAULTS))})")
+            # rules_file was removed in 3.4.0 — reject explicitly rather
+            # than silently ignoring a stale legacy key.
+            if "rules_file" in rcfg:
+                errors.append(
+                    f"roles.{rname}: 'rules_file' was removed in orze 3.4.0. "
+                    f"Replace with 'skills: [./{rcfg['rules_file']}]' "
+                    f"(or add bundled '@sop:<name>' entries).")
+            if mode == "claude":
+                import shutil as _shutil
+                _claude_bin = rcfg.get("claude_bin", "claude")
+                if not _shutil.which(_claude_bin):
+                    errors.append(
+                        f"roles.{rname}: mode 'claude' requires Claude CLI "
+                        f"but '{_claude_bin}' not found on PATH. "
+                        f"Install: npm install -g @anthropic-ai/claude-code")
+            if mode == "script" and not rcfg.get("script"):
+                errors.append(f"roles.{rname}: mode 'script' requires 'script'")
+            if mode == "research" and not rcfg.get("backend"):
+                errors.append(f"roles.{rname}: mode 'research' requires 'backend' "
+                              f"(gemini, openai, anthropic, ollama, custom)")
+
+    # Validate numeric fields
+    for key in ("timeout", "poll", "eval_timeout", "stall_minutes",
+                "max_idea_failures", "max_fix_attempts", "min_disk_gb",
+                "orphan_timeout_hours"):
+        val = cfg.get(key)
+        if val is not None and (not isinstance(val, (int, float)) or val < 0):
+            errors.append(f"{key}: must be a non-negative number, got {val!r}")
+
+    # Validate eval config consistency
+    if cfg.get("eval_script") and not cfg.get("eval_output"):
+        errors.append("eval_script is set but eval_output is missing")
+
+    # train_script must exist
+    ts = cfg.get("train_script")
+    if ts and not Path(ts).exists():
+        errors.append(f"train_script not found: {ts}")
+
+    # Contract check: verify train_script reads idea_config.yaml or idea_lake.db
+    if ts and Path(ts).exists():
+        try:
+            script_text = Path(ts).read_text()
+            reads_config = ("idea_config" in script_text
+                            or "idea_lake" in script_text
+                            or "sweep_config" in script_text)
+            if not reads_config:
+                warnings.append(
+                    f"train_script '{ts}' does not reference idea_config.yaml "
+                    f"or idea_lake.db — idea-specific config overrides may be ignored")
+        except OSError:
+            pass
+
+    # --- Warnings: things that might be unintentional ---
+
+    bc = cfg.get("base_config")
+    if bc and not Path(bc).exists():
+        warnings.append(f"base_config not found: {bc}")
+
+    es = cfg.get("eval_script")
+    if es and not Path(es).exists():
+        warnings.append(f"eval_script not found: {es}")
+
+    if not roles:
+        warnings.append("No research agent configured — idea generation disabled. "
+                        "Add an API key to .env (GEMINI_API_KEY, OPENAI_API_KEY, or "
+                        "ANTHROPIC_API_KEY) for auto-discovery, or configure roles: in orze.yaml")
+
+    # Check for API keys if research roles exist
+    has_research = roles and any(
+        isinstance(rc, dict) and rc.get("mode") == "research"
+        for rc in roles.values()
+    )
+    if has_research:
+        has_key = any(os.environ.get(k) for k in
+                      ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY"))
+        if not has_key:
+            warnings.append("Research role configured but no API keys found in environment")
+
+    gc_cfg = cfg.get("gc") or {}
+    if not gc_cfg.get("enabled"):
+        warnings.append("GC disabled — checkpoint dirs will accumulate indefinitely. "
+                        "Add gc: {enabled: true, checkpoints_dir: ...} to enable.")
+
+    ncfg = cfg.get("notifications", {})
+    if not ncfg.get("enabled"):
+        warnings.append("Notifications disabled")
+    else:
+        channels = ncfg.get("channels", [])
+        if not channels:
+            warnings.append("Notifications enabled but no channels configured")
+        for ch in channels:
+            if not isinstance(ch, dict):
+                continue
+            ch_type = ch.get("type", "?")
+            if ch_type == "telegram":
+                if not ch.get("bot_token"):
+                    warnings.append(f"Notification channel '{ch_type}': missing bot_token")
+                if not ch.get("chat_id"):
+                    warnings.append(f"Notification channel '{ch_type}': missing chat_id")
+            elif ch_type in ("slack", "discord"):
+                if not ch.get("webhook_url"):
+                    warnings.append(f"Notification channel '{ch_type}': missing webhook_url")
+            elif ch_type == "webhook":
+                if not ch.get("url"):
+                    warnings.append(f"Notification channel '{ch_type}': missing url")
+
+    # --- Issue A: Warn about unknown/misspelled config keys ---
+    _KNOWN_EXTRAS = {
+        "_config_path", "research", "gc", "metric_validation", "sealed_files",
+        "min_expected_results", "goal_file", "gpu_scheduling", "roles",
+        "notifications", "evolution", "retrospection", "cleanup",
+        "train_extra_args", "train_extra_env", "pre_script", "pre_args",
+        "pre_timeout", "eval_script", "eval_args", "eval_timeout",
+        "eval_output", "post_scripts", "report",
+        "admin_port", "idea_lake_db", "bot", "telegram_bot",
+        "sops", "containers",
+    }
+    known_keys = set(DEFAULT_CONFIG.keys()) | _KNOWN_EXTRAS
+    for key in cfg:
+        if key.startswith("_"):
+            continue  # computed/internal keys (prefix _)
+        if key not in known_keys:
+            known_list = ", ".join(sorted(known_keys))
+            warnings.append(
+                f"Unknown config key '{key}' in orze.yaml — possible typo? "
+                f"(known keys: {known_list})"
+            )
+
+    # --- Multi-tenant hint ---
+    ideas_val = cfg.get("ideas_file", "ideas.md")
+    if ideas_val == "ideas.md" or (not Path(ideas_val).is_absolute()
+                                    and not ideas_val.startswith(cfg.get("results_dir", "orze_results"))):
+        logger.debug("ideas_file is '%s' (relative, not under results_dir). "
+                      "Multi-instance setups should use distinct ideas_file paths.",
+                      ideas_val)
+
+    # --- Issue B: Warn if ideas_file does not exist yet ---
+    ideas_path = cfg.get("ideas_file")
+    if ideas_path and not Path(ideas_path).exists():
+        warnings.append(
+            f"ideas_file '{ideas_path}' does not exist yet — the system will "
+            f"have no ideas to run until it is created"
+        )
+
+    # --- Issue C: Error if python interpreter path does not exist ---
+    python_path = cfg.get("python")
+    if python_path and not Path(python_path).exists():
+        errors.append(f"python interpreter not found: {python_path}")
+
+    return errors, warnings
+
+def _sanitize_config(config: dict) -> dict:
+    """Sanitize config by replacing invalid numeric values with defaults.
+
+    Handles cases where AI-generated ideas use strings like 'variable' or 'auto'
+    in fields that expect integers (e.g., sequence_length, max_frames).
+    """
+    if not isinstance(config, dict):
+        return config
+
+    # Known numeric fields that should be integers
+    numeric_fields = {
+        ("training", "sequence_length"): 32,
+        ("training", "batch_size"): 16,
+        ("training", "epochs"): 10,
+        ("data", "batch_size"): 16,
+        ("data", "frame_sampling", "max_frames"): 32,
+        ("optimizer", "max_epochs"): 10,
+    }
+
+    # Known intermediate fields that must be dicts (not lists/scalars)
+    dict_fields = {
+        ("data", "frame_sampling"): {},
+    }
+
+    def sanitize_value(value, default):
+        """Try to convert to int; if it fails, return default."""
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except ValueError:
+                logger.warning(f"Replacing invalid numeric value '{value}' with {default}")
+                return default
+        return value
+
+    # Deep copy to avoid modifying original
+    config = copy.deepcopy(config)
+
+    # Ensure known intermediate fields are dicts
+    for path, default in dict_fields.items():
+        current = config
+        for key in path[:-1]:
+            if key not in current or not isinstance(current[key], dict):
+                break
+            current = current[key]
+        else:
+            final_key = path[-1]
+            if final_key in current and not isinstance(current[final_key], dict):
+                logger.warning(
+                    f"Replacing non-dict value for '{'.'.join(path)}' "
+                    f"(was {type(current[final_key]).__name__}) with {default}"
+                )
+                current[final_key] = default
+
+    # Sanitize known numeric fields
+    for path, default in numeric_fields.items():
+        current = config
+        for i, key in enumerate(path[:-1]):
+            if key not in current or not isinstance(current[key], dict):
+                break
+            current = current[key]
+        else:
+            # We successfully navigated to the parent dict
+            final_key = path[-1]
+            if final_key in current:
+                current[final_key] = sanitize_value(current[final_key], default)
+
+    return config
+
+
+# Path helper for .orze/ and orze_results/ layout
+_ORZE_DIR_KINDS = {"logs", "receipts", "locks", "triggers", "mcp", "state", 
+                    "heartbeats", "backups", "feedback", "tmp", "rules"}
+_RESULTS_KINDS = {"methods", "knowledge", "stray"}
+
+
+def orze_path(cfg: dict, kind: str, name: str = "") -> Path:
+    """Return path for orze-internal or results subdirectories.
+    
+    Args:
+        cfg: Config dict (must have _orze_dir and _env_ORZE_RESULTS_DIR)
+        kind: One of: logs, receipts, locks, triggers, mcp, state, heartbeats,
+              backups, feedback, tmp, stray, rules (→ .orze/kind/)
+              OR methods, knowledge (→ orze_results/kind/)
+        name: Optional subdirectory or filename under kind/
+    
+    Returns:
+        Path object. Parent directory is created if it doesn't exist.
+    
+    Raises:
+        ValueError: If kind is not recognized.
+    """
+    if kind in _ORZE_DIR_KINDS:
+        base = Path(cfg["_orze_dir"]) / kind
+    elif kind in _RESULTS_KINDS:
+        base = Path(cfg["_env_ORZE_RESULTS_DIR"]) / kind
+    else:
+        raise ValueError(f"Unknown kind: {kind}")
+    
+    base.mkdir(parents=True, exist_ok=True)
+    
+    if name:
+        return base / name
+    return base
+

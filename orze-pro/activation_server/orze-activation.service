@@ -1,0 +1,15 @@
+[Unit]
+Description=orze-pro Activation Server
+After=network.target
+
+[Service]
+Type=simple
+User=user
+WorkingDirectory=/home/user/orze-pro/activation_server
+Environment=ADMIN_TOKEN=changeme
+ExecStart=/usr/bin/python3 -m uvicorn app:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
