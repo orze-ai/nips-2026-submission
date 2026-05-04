@@ -51,7 +51,7 @@ Checkpoints, a 200-run sample of experiment logs, and all precomputed
 analysis JSONs are hosted at a public Hugging Face repository (URL in the
 paper's *Artifacts* section) — no authentication required.
 
-- `best_model.pt` — champion V-JEPA 2 checkpoint (`alertonly_v4`, 0.906 mAP)
+- `best_model.pt` — champion V-JEPA 2 checkpoint (`alertonly_v4`, 0.910 mAP)
 - `val_logloss_analysis.json` — per-run raw metrics
 - `bulletproof_proxy.json` — recomputed proxy analysis with field docstrings
 
@@ -68,10 +68,10 @@ pip install -e orze/ -e orze-pro/
 python scripts/nexar/train_vjepa2.py \
     --config configs/nexar/champion/vjepa2_alertonly_v4.yaml
 
-# 4. 4-TTA inference
+# 4. 12-TTA inference
 python scripts/nexar/extract_tta_dense_end.py \
     --ckpt /path/to/best_model.pt \
-    --n_tta 4 \
+    --n_tta 12 \
     --mean_pool False   # champion uses attentive probe, NOT mean pooling
 ```
 
