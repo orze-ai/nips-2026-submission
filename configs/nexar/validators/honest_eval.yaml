@@ -1,0 +1,43 @@
+# Validator configuration for honest evaluation (Section 4.4)
+#
+# Defines the validation pipeline: primary metric, calibration,
+# and the alpha-trimmed proxy used for checkpoint selection.
+
+validator:
+  name: nexar_honest_eval
+  description: "Honest evaluation with alpha-trimmed proxy correlation"
+
+primary_metric:
+  name: pgmAP_ALL
+  direction: maximize
+
+proxy_metric:
+  name: val_logloss
+  direction: minimize
+  alpha: 0.95              # trim top 5% of proxy scores (outlier guard)
+
+calibration:
+  method: isotonic          # isotonic regression on held-out fold
+  cv_folds: 5
+  fallback: platt           # Platt scaling if isotonic fails
+
+tta:
+  n_views: 12
+  views:
+    - name: identity
+    - name: hflip
+    - name: stride_fast     # clip_stride=3 instead of 4
+    - name: stride_slow     # clip_stride=5
+    - name: crop_left
+    - name: crop_right
+    - name: crop_top
+    - name: crop_bottom
+    - name: hflip_stride_fast
+    - name: hflip_stride_slow
+    - name: hflip_crop_left
+    - name: hflip_crop_right
+  aggregation: mean         # arithmetic mean of sigmoid probabilities
+
+thresholds:
+  min_val_auc: 0.75         # reject checkpoints below this clip-level AUC
+  max_val_logloss: 0.50     # reject if logloss exceeds this bound

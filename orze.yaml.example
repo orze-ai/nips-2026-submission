@@ -1,0 +1,28 @@
+# Example orze configuration for Nexar collision experiments
+# See orze/README.md for full documentation
+
+project:
+  name: nexar-collision
+  description: "Dashcam collision prediction with V-JEPA 2"
+
+roles:
+  search:
+    mode: script
+    script: -m orze.agents.search_role
+    args: ["--results-dir", "{results_dir}"]
+    cooldown: 30
+    timeout: 600
+
+sweep:
+  config: configs/nexar/champion/vjepa2_alertonly_v4.yaml
+  portfolio: configs/nexar/portfolios/tpe_bohb_random.yaml
+  validator: configs/nexar/validators/honest_eval.yaml
+  max_trials: 200
+
+train:
+  script: scripts/nexar/train_vjepa2.py
+  gpu: auto
+
+eval:
+  script: scripts/nexar/extract_tta_dense_end.py
+  n_tta: 12

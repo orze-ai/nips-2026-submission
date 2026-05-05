@@ -1,0 +1,42 @@
+# Ablation: champion recipe WITHOUT Mixup augmentation
+# Expected: ~0.02 mAP drop vs champion (Table 3 in paper)
+
+model_name: facebook/vjepa2-vitl-fpc64-256
+freeze_backbone: true
+lora_r: 16
+lora_alpha: 32
+lora_targets: [q_proj, v_proj]
+
+num_probe_queries: 1
+mean_pool: false
+use_mlp_head: false
+drop_path_rate: 0.1
+
+train_csv: /workspace/datasets/nexar_collision/train.csv
+val_csv: /workspace/datasets/nexar_collision/val.csv
+video_dir: /workspace/datasets/nexar_collision/train
+crop_size: 256
+clip_frames: 16
+clip_stride: 4
+alert_only: true
+
+epochs: 30
+batch_size: 16
+lr: 3.0e-4
+weight_decay: 0.05
+warmup_epochs: 2
+label_smoothing: 0.0
+
+# Key difference: Mixup disabled
+mixup_alpha: 0.0
+cutmix_alpha: 0.0
+
+sam_enabled: true
+sam_rho: 0.05
+
+group_aligned_ce: true
+group_column: video_id
+
+eval_metric: pgmAP_ALL
+patience: 10
+save_dir: ./checkpoints/ablation_no_mixup
