@@ -1,8 +1,7 @@
 # Orze — NeurIPS 2026 Anonymous Code Release
 
 This is the anonymized code release accompanying the submission
-*"Self-Evolving Search Spaces: The η² Boundary Between Auto-Tuning
-and Auto-Research"*.
+*"Auto-Researching, Not Hyperparameter Tuning: Convergence Analysis of 10,000 Experiments"*.
 
 > **Double-blind review copy.** Author-identifying strings (organization,
 > usernames, upstream GitHub URLs) have been replaced with `ANON`. The
