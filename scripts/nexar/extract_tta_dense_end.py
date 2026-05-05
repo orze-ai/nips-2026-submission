@@ -152,6 +152,33 @@ def prepare_clip(
 # Main Inference
 # ---------------------------------------------------------------------------
 
+def _aggregate_mean(clip_probs: List[float]) -> float:
+    """Default aggregation: max over clip positions (dense-end)."""
+    return float(max(clip_probs)) if clip_probs else 0.0
+
+
+def _aggregate_cv_mix(
+    clip_probs: List[float], alpha: float = 0.95,
+) -> float:
+    """CV-mix aggregation: alpha * last + (1-alpha) * top6_mean.
+
+    - `last` = prediction from the last temporal clip (highest index).
+    - `top6_mean` = mean of the top-6 predictions by confidence score.
+    - Final = alpha * last + (1 - alpha) * top6_mean.
+
+    This aggregation leverages the observation that the final clip captures
+    the collision moment, while the top-6 mean provides a robust confidence
+    baseline.  alpha=0.95 was tuned on the public validation split.
+    """
+    if not clip_probs:
+        return 0.0
+    last = clip_probs[-1]  # last temporal position
+    sorted_desc = sorted(clip_probs, reverse=True)
+    top6 = sorted_desc[:min(6, len(sorted_desc))]
+    top6_mean = float(np.mean(top6))
+    return float(alpha * last + (1.0 - alpha) * top6_mean)
+
+
 @torch.no_grad()
 def run_tta_inference(
     model: nn.Module,
@@ -163,12 +190,18 @@ def run_tta_inference(
     sample_stride: int = 30,
     batch_size: int = 16,
     device: torch.device = torch.device("cpu"),
+    aggregation: str = "mean",
+    cv_mix_alpha: float = 0.95,
 ) -> Dict[str, float]:
     """Run TTA inference over all test videos.
 
     For each video, slides a dense window and applies `n_tta` augmentation
     views. Per-clip sigmoid probabilities are averaged across views, then
-    the per-video score is the max over clip positions (dense-end protocol).
+    the per-video score is determined by the chosen aggregation strategy:
+
+    - ``mean`` (default): max over clip positions (dense-end protocol).
+    - ``cv_mix``: alpha * last_clip + (1 - alpha) * top6_mean, where
+      alpha is tuned on the public split (default 0.95).
 
     Returns dict mapping video_id -> collision probability.
     """
@@ -213,10 +246,13 @@ def run_tta_inference(
         if (vid_idx + 1) % 50 == 0:
             logger.info("Processed %d/%d videos", vid_idx + 1, len(video_ids))
 
-    # Per-video score: max over clip positions (dense-end)
+    # Per-video score: aggregate clip-level predictions
     final: Dict[str, float] = {}
     for vid, probs in results.items():
-        final[vid] = float(max(probs)) if probs else 0.0
+        if aggregation == "cv_mix":
+            final[vid] = _aggregate_cv_mix(probs, alpha=cv_mix_alpha)
+        else:
+            final[vid] = _aggregate_mean(probs)
 
     return final
 
@@ -253,6 +289,16 @@ def main():
         "--test_csv", type=str,
         default="/workspace/datasets/nexar_collision/test.csv",
         help="Test CSV with video_id column",
+    )
+    parser.add_argument(
+        "--aggregation", type=str, default="mean",
+        choices=["mean", "cv_mix"],
+        help="Clip-level aggregation: 'mean' = max over clips (default), "
+             "'cv_mix' = alpha*last + (1-alpha)*top6_mean",
+    )
+    parser.add_argument(
+        "--cv_mix_alpha", type=float, default=0.95,
+        help="Alpha for cv_mix aggregation (default 0.95, tuned on public split)",
     )
     parser.add_argument("--clip_frames", type=int, default=16)
     parser.add_argument("--crop_size", type=int, default=CROP_SIZE)
@@ -293,7 +339,8 @@ def main():
     model = model.to(device)
     model.eval()
     logger.info(
-        "Model loaded (mean_pool=%s, n_tta=%d)", mean_pool, args.n_tta,
+        "Model loaded (mean_pool=%s, n_tta=%d, aggregation=%s)",
+        mean_pool, args.n_tta, args.aggregation,
     )
 
     # Get test video IDs
@@ -314,6 +361,8 @@ def main():
         sample_stride=args.sample_stride,
         batch_size=args.batch_size,
         device=device,
+        aggregation=args.aggregation,
+        cv_mix_alpha=args.cv_mix_alpha,
     )
 
     # Save as .npz

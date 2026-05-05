@@ -35,7 +35,7 @@ RUN conda create -n vlm_env python=3.11 -y
 RUN source activate vlm_env && \
     pip install torch==2.9.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 RUN source activate vlm_env && \
-    pip install -e .
+    pip install -e orze/ -e orze-pro/
 
 # Set conda environment activation in bashrc
 RUN echo "source activate vlm_env" >> ~/.bashrc
