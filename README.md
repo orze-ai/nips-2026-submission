@@ -13,7 +13,7 @@ This is the anonymized code release accompanying the submission
 ```
 orze-anon/
 ├── orze/                       Apache-2.0 orchestration system
-├── orze-pro/                   Intelligence layer (agents, procedures, SOPs)
+├── orze-pro/                   Research-agent extension (reviewer license)
 ├── configs/nexar/              YAML configs for the Nexar experiments
 │   ├── champion/                 deployed single-model champion recipe
 │   ├── methods/                  all ablation / method configs
@@ -21,7 +21,8 @@ orze-anon/
 │   └── validators/               validator / calibration configs
 ├── scripts/nexar/              train_vjepa2.py + TTA extractor
 ├── scripts/dashcam_risk/       SMAC baseline runner + analyzer
-├── .env                        pre-baked orze-pro license (review copy)
+├── .env                        pre-baked reviewer license (loaded automatically)
+├── .env.reviewer               backup copy of reviewer license key
 ├── Dockerfile                  reproducible training environment
 ├── LICENSE                     Apache-2.0 (upstream orze license)
 └── SCRUB_NOTES.md              double-blind scrub audit
@@ -29,19 +30,40 @@ orze-anon/
 
 ## orze-pro activation (no network calls required)
 
-The `.env` at the repository root contains a valid orze-pro license key
-baked in for review. Its signature is verified against the Ed25519 public
-key embedded in `orze-pro/src/orze_pro/license.py`. The activation endpoint
-is deliberately pointed at an invalid host (`disabled.for.review.invalid`)
-so `license.py` falls through to its air-gapped offline-pending branch and
-**no network traffic leaves the reviewer's machine**.
+**Orze-Pro is the research-agent extension of Orze.** The core orchestrator
+(`orze/`) is open-source (Apache-2.0). Orze-Pro (`orze-pro/`) is a
+commercial extension provided here under a **reviewer license** so that all
+claims in the paper can be verified without requesting access.
+
+A pre-configured license key is included in two places:
+
+| File | Purpose |
+|------|---------|
+| `.env` | Loaded automatically by `orze-pro` at import time |
+| `.env.reviewer` | Backup copy; can be copied to `.env` or exported manually |
+
+The key expires **2026-08-05** and is limited to 2 machines. To use it
+manually:
+
+```bash
+# Option A: source the .env (already done by Docker and pip install)
+set -a; . ./.env; set +a
+
+# Option B: export directly
+export ORZE_PRO_KEY="ORZE-PRO-eyJjdXN0b21lciI6Im5pcHMtcmV2aWV3IiwidGllciI6InBybyIsIm1heF9tYWNoaW5lcyI6MiwiZXhwaXJlcyI6IjIwMjYtMDgtMDUifQ.qubHdBgwRIQkUgWNx52fiTGJs4EL3A5xtm8tVJQIYC5eCtrC4-1h3f7E7NrWw7WuP6vdmHBd5_PPempRXTwFDQ"
+```
+
+The activation endpoint is deliberately pointed at an invalid host
+(`disabled.for.review.invalid`) so `license.py` falls through to its
+air-gapped offline-pending branch and **no network traffic leaves the
+reviewer's machine**.
 
 Verify from a shell:
 
 ```bash
 set -a; . ./.env; set +a
 python -c "from orze_pro.license import license_info; print(license_info())"
-# Licensed to admin (pro), expires 2027-12-31
+# Licensed to nips-review (pro), expires 2026-08-05
 ```
 
 ## Companion artifacts (public Hugging Face)
@@ -82,9 +104,17 @@ orze run orze.yaml.example
 
 See `orze/README.md` and `orze-pro/README.md` for full documentation.
 
+## De-anonymization
+
+This repository is fully anonymized for double-blind review. Author
+identities, organization names, and upstream repository URLs are replaced
+with `ANON`. Full de-anonymization (including conflict-of-interest
+disclosures) will be provided upon acceptance.
+
 ## Licensing
 
 - `orze/` — Apache-2.0 (unchanged from upstream).
-- `orze-pro/` — upstream license is proprietary; a review-only notice is
-  included in `orze-pro/LICENSE`. Original license restored upon
-  de-anonymization.
+- `orze-pro/` — upstream license is proprietary; a **reviewer license key**
+  (expires 2026-08-05, 2 machines) is pre-configured in `.env` and
+  `.env.reviewer` so all experiments can be reproduced without requesting
+  access. Original license restored upon de-anonymization.
